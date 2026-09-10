@@ -737,10 +737,32 @@
         }
 
         function solve24(nums) {
-            // Recursive solver returning ALL unique solutions
+            // Recursive solver returning all solutions, deduplicated up to commutativity
+            // and associativity of + and * (1*2*3*4 and 4*3*2*1 count once).
+            const node = (op, a, b, val) => {
+                // Flatten chains of the same commutative op and sort the operands
+                let args = [];
+                for (let x of [a, b]) {
+                    if ((op === '+' || op === '*') && x.op === op) args.push(...x.args);
+                    else args.push(x);
+                }
+                if (op === '+' || op === '*') args.sort((x, y) => x.key < y.key ? -1 : x.key > y.key ? 1 : 0);
+                const key = '(' + args.map(x => x.key).join(op) + ')';
+                return { val, op, args, key };
+            };
+            const render = (n) => {
+                if (!n.op) return n.key;
+                const wrap = (c) => c.op ? '(' + render(c) + ')' : render(c);
+                if (n.op === '+') return n.args.map(render).join('+');
+                if (n.op === '*') return n.args.map(c => c.op === '+' || c.op === '-' ? '(' + render(c) + ')' : render(c)).join('*');
+                // - and /: left keeps its shape if it binds tighter, right always wraps when compound
+                const [l, r] = n.args;
+                const left = (n.op === '/' && (l.op === '+' || l.op === '-')) ? '(' + render(l) + ')' : render(l);
+                return left + n.op + wrap(r);
+            };
             function getExprs(list) {
                 if (list.length === 1) {
-                    if (Math.abs(list[0].val - 24) < 0.0001) return [{ expr: list[0].expr, val: list[0].val }];
+                    if (Math.abs(list[0].val - 24) < 0.0001) return [list[0]];
                     return [];
                 }
                 let results = [];
@@ -752,27 +774,26 @@
 
                         let a = list[i], b = list[j];
                         let combos = [
-                            { val: a.val + b.val, expr: `(${a.expr}+${b.expr})` },
-                            { val: a.val * b.val, expr: `(${a.expr}*${b.expr})` },
-                            { val: a.val - b.val, expr: `(${a.expr}-${b.expr})` },
-                            { val: b.val - a.val, expr: `(${b.expr}-${a.expr})` }
+                            node('+', a, b, a.val + b.val),
+                            node('*', a, b, a.val * b.val),
+                            node('-', a, b, a.val - b.val),
+                            node('-', b, a, b.val - a.val)
                         ];
-                        if (b.val !== 0) combos.push({ val: a.val / b.val, expr: `(${a.expr}/${b.expr})` });
-                        if (a.val !== 0) combos.push({ val: b.val / a.val, expr: `(${b.expr}/${a.expr})` });
+                        if (b.val !== 0) combos.push(node('/', a, b, a.val / b.val));
+                        if (a.val !== 0) combos.push(node('/', b, a, b.val / a.val));
 
                         for (let c of combos) {
-                            let sub = getExprs([c, ...rest]);
-                            results.push(...sub);
+                            results.push(...getExprs([c, ...rest]));
                         }
                     }
                 }
                 return results;
             }
 
-            let initial = nums.map(n => ({ val: n, expr: n.toString() }));
-            let allSolutions = getExprs(initial);
-            // Deduplicate by expression string
-            let unique = [...new Set(allSolutions.map(s => s.expr))].map(e => ({ expr: e }));
+            let initial = nums.map(n => ({ val: n, op: null, args: [], key: n.toString() }));
+            let seen = new Map();
+            for (let sol of getExprs(initial)) if (!seen.has(sol.key)) seen.set(sol.key, { expr: render(sol) });
+            let unique = [...seen.values()];
             return unique.length > 0 ? unique : null;
         }
     </script>
