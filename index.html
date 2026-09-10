@@ -579,8 +579,20 @@
             document.getElementById('summary-title').innerHTML = titleHtml;
 
             let details = `Drawn Cards: ${state.cards.map(c => c.display + c.suit).join(', ')}<br>`;
-            let solution = solve24(state.cards.map(c => c.valNum));
-            details += `Possible Solution: ${solution ? solution : 'None (Truly Impossible)'}<br><br>`;
+            let allSolutions = solve24(state.cards.map(c => c.valNum));
+            if(allSolutions) {
+                let first = allSolutions[0].expr;
+                let count = allSolutions.length;
+                details += `Possible Solutions: ${count} total<br>`;
+                details += `<details class="inline"><summary class="cursor-pointer text-amber-400 underline">Show First Solution</summary><div class="mono text-slate-300 mt-1">${first}</div></details> `;
+                if(count > 1) {
+                    details += `<details class="inline"><summary class="cursor-pointer text-amber-400 underline">Show All ${count} Solutions</summary><div class="mono text-slate-300 mt-1 whitespace-pre-wrap">${allSolutions.map(s => s.expr).join('\n')}</div></details><br><br>`;
+                } else {
+                    details += `<br><br>`;
+                }
+            } else {
+                details += `Possible Solution: None (Truly Impossible)<br><br>`;
+            }
 
             let loserNames = [];
             loserIds.forEach(id => {
@@ -643,13 +655,13 @@
         }
 
         function solve24(nums) {
-            // Simple recursive solver to find a 24 solution for display in summary
+            // Recursive solver returning ALL unique solutions
             function getExprs(list) {
                 if (list.length === 1) {
-                    if (Math.abs(list[0].val - 24) < 0.0001) return [list[0].expr];
+                    if (Math.abs(list[0].val - 24) < 0.0001) return [{ expr: list[0].expr, val: list[0].val }];
                     return [];
                 }
-                let res = [];
+                let results = [];
                 for (let i = 0; i < list.length; i++) {
                     for (let j = 0; j < list.length; j++) {
                         if (i === j) continue;
@@ -668,16 +680,18 @@
 
                         for (let c of combos) {
                             let sub = getExprs([c, ...rest]);
-                            if (sub.length > 0) return sub;
+                            results.push(...sub);
                         }
                     }
                 }
-                return [];
+                return results;
             }
 
             let initial = nums.map(n => ({ val: n, expr: n.toString() }));
-            let solutions = getExprs(initial);
-            return solutions.length > 0 ? solutions[0] : null;
+            let allSolutions = getExprs(initial);
+            // Deduplicate by expression string
+            let unique = [...new Set(allSolutions.map(s => s.expr))].map(e => ({ expr: e }));
+            return unique.length > 0 ? unique : null;
         }
     </script>
 </body>
