@@ -80,7 +80,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Second/Accuse Timer (Seconds)</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Back/Accuse Timer (Seconds)</label>
                         <select id="setting-timer-second" class="w-full bg-felt-950 border border-felt-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
                             <option value="10">10 seconds</option>
                             <option value="20" selected>20 seconds</option>
@@ -108,6 +108,13 @@
                         <select id="setting-face" class="w-full bg-felt-950 border border-felt-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
                             <option value="standard" selected>J=11, Q=12, K=13, A=1</option>
                             <option value="ones">J, Q, K = 10, A = 1</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Deck Mode</label>
+                        <select id="setting-deck-mode" class="w-full bg-felt-950 border border-felt-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <option value="persist" selected>Persisting (Draw & exhaust, max 13 rounds)</option>
+                            <option value="shuffle">Reshuffle Every Round (Unlimited rounds)</option>
                         </select>
                     </div>
                 </div>
@@ -198,14 +205,16 @@
             players: [],
             round: 1,
             cards: [], // [{suit, value, display, valNum}]
+            deck: [], // Persistent deck for the session
             phase: 'setup', // 'setup', 'claim', 'second', 'accuse_or_prove', 'summary'
             timer: 30,
             timerInterval: null,
             claims: [], // [{playerIndex, type: 'possible'|'impossible', timestamp}]
-            seconds: [], // playerIndices who seconded
+            backers: [], // playerIndices who back the claim
+            actionOrder: [], // order in which players backed the claim
             accidents: [], // accusations
-            proof: { solver: null, expr: '', valid: false },
-            settings: { timerClaim: 30, timerSecond: 20, timerProve: 30, face: 'standard' }
+            proof: { solver: null, challenger: null, target: null, mode: null },
+            settings: { timerClaim: 30, timerSecond: 20, timerProve: 30, face: 'standard', deckMode: 'persist' }
         };
 
         const SUITS = ['♠', '♣', '♥', '♦'];
@@ -242,7 +251,10 @@
             state.settings.timerSecond = parseInt(document.getElementById('setting-timer-second').value);
             state.settings.timerProve = parseInt(document.getElementById('setting-timer-prove').value);
             state.settings.face = document.getElementById('setting-face').value;
+            state.settings.deckMode = document.getElementById('setting-deck-mode').value;
             state.round = 1;
+            state.deck = buildDeck();
+            if(state.settings.deckMode === 'shuffle') shuffleDeck(state.deck);
 
             document.getElementById('screen-setup').classList.add('hidden');
             document.getElementById('screen-game').classList.remove('hidden');
@@ -251,18 +263,25 @@
             startNewRound();
         }
 
-        function dealCards() {
-            // Generate random 4 cards from standard 52 deck
+        function buildDeck() {
             let deck = [];
             for(let s of SUITS) {
                 for(let v = 1; v <= 13; v++) {
                     deck.push({ suit: s, val: v });
                 }
             }
-            // Shuffle
-            deck.sort(() => Math.random() - 0.5);
-            let drawn = deck.slice(0, 4);
+            return deck;
+        }
 
+        function shuffleDeck(deck) {
+            for(let i = deck.length - 1; i > 0; i--) {
+                let j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+        }
+
+        function drawCards(count) {
+            let drawn = state.deck.splice(0, count);
             return drawn.map(c => {
                 let valNum = c.val;
                 if(state.settings.face === 'standard') {
@@ -287,12 +306,26 @@
         }
 
         function startNewRound() {
-            state.cards = dealCards();
+            // Deck management
+            if(state.settings.deckMode === 'persist') {
+                // Persisting deck: only reshuffle when completely empty (0 cards)
+                if(state.deck.length === 0) {
+                    state.deck = buildDeck();
+                    shuffleDeck(state.deck);
+                }
+            } else {
+                // Shuffle mode: fresh deck every round
+                state.deck = buildDeck();
+                shuffleDeck(state.deck);
+            }
+
+            state.cards = drawCards(4);
             state.claims = [];
-            state.seconds = [];
+            state.backers = [];
+            state.actionOrder = [];
             state.accidents = [];
-            state.proof = { solver: null, expr: '', valid: false };
-            // Track which players have taken action (Second or Accuse)
+            state.proof = { solver: null, challenger: null, target: null, mode: null };
+            // Track which players have taken action (Back or Challenge)
             state.playersActed = new Array(state.players.length).fill(false);
             // Track solver submission times for penalty
             state.solverTimes = [];
@@ -368,7 +401,7 @@
                 phaseName.textContent = 'Claim Phase (Possible / Impossible)';
                 bannerText.textContent = state.claims.length === 0 ?
                     'Be the first player to claim whether 24 is possible or impossible!' :
-                    `First claim made by ${state.players[state.claims[0].playerIndex].name} (${state.claims[0].type.toUpperCase()}). Others can now Second or Claim!`;
+                    `First claim made by ${state.players[state.claims[0].playerIndex].name} (${state.claims[0].type.toUpperCase()}). Others can now Back or Challenge!`;
 
                 let html = `<h4 class="text-sm font-bold text-amber-100 mb-4">Make Your Claim</h4><div class="grid grid-cols-1 sm:grid-cols-2 gap-4">`;
                 state.players.forEach((p, idx) => {
@@ -388,31 +421,46 @@
                 controls.innerHTML = html;
             }
             else if(state.phase === 'second_or_accuse') {
-                phaseName.textContent = 'Second / Accuse Phase';
+                phaseName.textContent = 'Back / Challenge Phase';
                 const firstClaim = state.claims[0];
                 const claimant = state.players[firstClaim.playerIndex];
-                bannerText.textContent = `${claimant.name} claimed it is ${firstClaim.type.toUpperCase()}! Other players may Second or Accuse.`;
+                bannerText.textContent = `${claimant.name} claimed it is ${firstClaim.type.toUpperCase()}! Other players may Back or Challenge.`;
 
                 let html = `<h4 class="text-sm font-bold text-amber-100 mb-4">Player Responses</h4><div class="space-y-3">`;
 
+                // Find who hasn't acted yet and who the "last player" is (last to act)
+                const actedPlayers = [firstClaim.playerIndex, ...state.backers];
+                const remainingPlayers = state.players.filter(p => !actedPlayers.includes(p.id));
+
                 state.players.forEach((p, idx) => {
                     if(idx === firstClaim.playerIndex) return; // skip first claimant
-                    const isSeconded = state.seconds.includes(idx);
+                    const isBacking = state.backers.includes(idx);
+                    const isLastPlayer = remainingPlayers.length === 1 && remainingPlayers[0].id === p.id;
 
                     html += `
                         <div class="bg-felt-950 border border-felt-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
-                            <span class="font-semibold text-sm text-slate-200 w-32">${p.name}</span>
+                            <span class="font-semibold text-sm text-slate-200 w-32">${p.name} ${isLastPlayer ? '<span class="text-[10px] text-amber-500 border border-amber-900 px-1 rounded ml-1">LAST</span>' : ''}</span>
                             <div class="flex items-center gap-2">
-                                <button onclick="toggleSecond(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-semibold border ${isSeconded ? 'bg-amber-500 text-felt-950 border-amber-400' : 'bg-felt-900 text-slate-300 border-felt-800 hover:bg-felt-800'}">
-                                    ${isSeconded ? '✓ Seconded' : 'Second First Player'}
-                        <span class="text-xs text-slate-500 ml-2" title="Finalizing checks the math and decides the round - anyone can press this button">(any player can finalize)</span>                                </button>
-                                ${firstClaim.type === 'possible' ? `
-                                    <button onclick="accusePlayer(${idx}, ${firstClaim.playerIndex})" class="px-3 py-1.5 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg text-xs font-semibold">
-                                        Accuse of Lying
+                                ${!isLastPlayer ? `
+                                    <button onclick="toggleBack(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-semibold border ${isBacking ? 'bg-amber-500 text-felt-950 border-amber-400' : 'bg-felt-900 text-slate-300 border-felt-800 hover:bg-felt-800'}">
+                                        ${isBacking ? '✓ Backing' : 'Back First Player'}
                                     </button>
+                                ` : ''}
+
+                                ${firstClaim.type === 'possible' ? `
+                                    <div class="flex gap-1">
+                                        <button onclick="challengePlayer(${idx}, ${firstClaim.playerIndex})" class="px-3 py-1.5 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg text-[10px] font-semibold">
+                                            Challenge Claimant
+                                        </button>
+                                        ${state.backers.length > 0 ? state.backers.map(bId => `
+                                            <button onclick="challengePlayer(${idx}, ${bId})" class="px-3 py-1.5 bg-orange-950 hover:bg-orange-900 text-orange-300 border border-orange-800 rounded-lg text-[10px] font-semibold">
+                                                Challenge ${state.players[bId].name}
+                                            </button>
+                                        `).join('') : ''}
+                                    </div>
                                 ` : `
-                                    <button onclick="provePossible(${idx})" class="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg text-xs font-semibold">
-                                        Prove Possible!
+                                    <button onclick="challengePossible(${idx})" class="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg text-xs font-semibold">
+                                        Challenge (It's Possible!)
                                     </button>
                                 `}
                             </div>
@@ -472,30 +520,43 @@
             }
         }
 
-        function toggleSecond(playerIndex) {
-            const idx = state.seconds.indexOf(playerIndex);
+        function toggleBack(playerIndex) {
+            const idx = state.backers.indexOf(playerIndex);
             if(idx > -1) {
-                state.seconds.splice(idx, 1);
+                state.backers.splice(idx, 1);
+                state.actionOrder = state.actionOrder.filter(id => id !== playerIndex);
             } else {
-                state.seconds.push(playerIndex);
+                state.backers.push(playerIndex);
+                state.actionOrder.push(playerIndex);
             }
             renderGameUI();
         }
 
-        function accusePlayer(accuserIndex, accusedIndex) {
-            // Accused must prove by solving to 24
-            state.proof.solver = accusedIndex;
+        function challengePlayer(challengerIndex, targetIndex) {
+            // Last player in 3+ player games can challenge any backer or the first claimant!
+            // If first claim is "possible", the target must prove it.
+            state.proof = {
+                solver: targetIndex,
+                challenger: challengerIndex,
+                target: targetIndex,
+                mode: 'prove_possible'
+            };
             state.phase = 'prove_solution';
             renderGameUI();
-            startTimer(state.settings.timerProve, () => handleAccusationTimeout(accusedIndex, accuserIndex));
+            startTimer(state.settings.timerProve, () => handleChallengeTimeout(challengerIndex, targetIndex));
         }
 
-        function provePossible(challengerIndex) {
-            // Challenger claims it's possible when first player claimed impossible
-            state.proof.solver = challengerIndex;
+        function challengePossible(challengerIndex) {
+            // First claim was impossible; challenger claims it is possible and must prove it!
+            state.proof = {
+                solver: challengerIndex,
+                challenger: challengerIndex,
+                target: challengerIndex,
+                mode: 'prove_possible_impossible'
+            };
             state.phase = 'prove_solution';
             renderGameUI();
-            startTimer(state.settings.timerProve, () => handleChallengeTimeout(challengerIndex));
+            startTimer(state.settings.timerProve, () => handleChallengeTimeout(challengerIndex, challengerIndex));
         }
 
         function finalizeResponses() {
@@ -516,11 +577,11 @@
                     // It WAS possible! The claimant lied (or failed impossible claim). Claimant loses!
                     let losers = [firstClaim.playerIndex];
                     // Anyone who seconded the impossible claim also loses!
-                    state.seconds.forEach(s => losers.push(s));
+                    state.backers.forEach(s => losers.push(s));
                     endRoundSummary(`The claim of IMPOSSIBLE was FALSE! A solution exists: <span class="mono text-amber-400">${solution}</span>. Claimant(s) lose!`, losers);
                 } else {
                     // It was truly IMPOSSIBLE! Claimant wins, everyone else (except seconders of impossible) loses.
-                    let losers = state.players.map(p => p.id).filter(id => id !== firstClaim.playerIndex && !state.seconds.includes(id));
+                    let losers = state.players.map(p => p.id).filter(id => id !== firstClaim.playerIndex && !state.backers.includes(id));
                     endRoundSummary(`The claim of IMPOSSIBLE was TRUE! No solution exists. Non-believers lose!`, losers);
                 }
             }
@@ -539,12 +600,12 @@
                 if(firstClaim.type === 'impossible') {
                     // Challenger (solverId) proved it is possible -> Claimant (P1) and seconders lose!
                     losers.push(firstClaim.playerIndex);
-                    state.seconds.forEach(s => losers.push(s));
+                    state.backers.forEach(s => losers.push(s));
                 } else {
                     // Claimant (solverId) proved possible -> Everyone else who didn't second loses
                     // In a 2-player game, this naturally means the slower player (P2) loses
                     state.players.forEach(p => {
-                        if(p.id !== solverId && !state.seconds.includes(p.id)) {
+                        if(p.id !== solverId && !state.backers.includes(p.id)) {
                             losers.push(p.id);
                         }
                     });
@@ -556,14 +617,14 @@
         }
 
         function handleClaimantProofTimeout(solverId) {
-            let losers = [solverId, ...state.seconds];
+            let losers = [solverId, ...state.backers];
             endRoundSummary(`${state.players[solverId].name} ran out of time to prove! Claimant & seconders lose.`, losers);
         }
         function handleTimeoutLoss(solverId) {
             endRoundSummary(`Time ran out for ${state.players[solverId].name}! They lose.`, [solverId]);
         }
         function handleAccusationTimeout(accusedId, accuserKey) {
-            let losers = [accusedId, ...state.seconds];
+            let losers = [accusedId, ...state.backers];
             endRoundSummary(`${state.players[accusedId].name} failed to prove in time! Accused and seconders lose.`, losers);
         }
         function handleChallengeTimeout(challengerId) {
