@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>24-Bluff: The Arithmetical Card Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        felt: { 800: '#1e3a2f', 900: '#13261e', 950: '#0b1612' },
+                        card: { bg: '#f8fafc', border: '#e2e8f0' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3); }
+    </style>
+</head>
+<body class="bg-felt-950 text-slate-100 min-h-screen flex flex-col justify-between select-none">
+
+    <!-- Header -->
+    <header class="bg-felt-900 border-b border-felt-800 px-6 py-4 flex justify-between items-center shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-amber-500 text-felt-950 font-bold px-3 py-1.5 rounded-lg text-lg mono shadow">24</div>
+            <h1 class="text-xl font-bold tracking-tight text-amber-100">Bluff & Fact <span class="text-xs uppercase bg-felt-800 text-amber-400 px-2 py-0.5 rounded ml-2 border border-felt-700">Card Game</span></h1>
+        </div>
+        <div id="game-status-badge" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-900 text-emerald-200 border border-emerald-700">
+            Lobby
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow container mx-auto px-4 py-6 max-w-5xl flex flex-col justify-center">
+
+        <!-- SETUP SCREEN -->
+        <div id="screen-setup" class="bg-felt-900/80 border border-felt-800 rounded-2xl p-8 max-w-xl mx-auto w-full shadow-2xl backdrop-blur">
+            <h2 class="text-2xl font-bold mb-2 text-amber-100">Game Setup</h2>
+            <p class="text-slate-400 text-sm mb-6">Configure players and rules for the 24-card arithmetic challenge.</p>
+
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Players (Comma separated or add below)</label>
+                    <div id="player-inputs" class="space-y-2">
+                        <div class="flex gap-2">
+                            <input type="text" value="Alice" class="player-name-input flex-grow bg-felt-950 border border-felt-800 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <button onclick="removePlayerInput(this)" class="px-3 py-2 bg-red-950/50 hover:bg-red-900 text-red-300 rounded-lg border border-red-800 text-sm">✕</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" value="Bob" class="player-name-input flex-grow bg-felt-950 border border-felt-800 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <button onclick="removePlayerInput(this)" class="px-3 py-2 bg-red-950/50 hover:bg-red-900 text-red-300 rounded-lg border border-red-800 text-sm">✕</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" value="Charlie" class="player-name-input flex-grow bg-felt-950 border border-felt-800 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <button onclick="removePlayerInput(this)" class="px-3 py-2 bg-red-950/50 hover:bg-red-900 text-red-300 rounded-lg border border-red-800 text-sm">✕</button>
+                        </div>
+                    </div>
+                    <button onclick="addPlayerInput()" class="mt-3 text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1">
+                        + Add Player
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Claim Timer (Seconds)</label>
+                        <select id="setting-timer-claim" class="w-full bg-felt-950 border border-felt-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <option value="15">15 seconds</option>
+                            <option value="30" selected>30 seconds</option>
+                            <option value="60">60 seconds</option>
+                            <option value="90">90 seconds</option>
+                            <option value="0">No Limit</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Second/Accuse Timer (Seconds)</label>
+                        <select id="setting-timer-second" class="w-full bg-felt-950 border border-felt-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <option value="10">10 seconds</option>
+                            <option value="20" selected>20 seconds</option>
+                            <option value="30">30 seconds</option>
+                            <option value="45">45 seconds</option>
+                            <option value="60">60 seconds</option>
+                            <option value="0">No Limit</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Prove Timer (Seconds)</label>
+                        <select id="setting-timer-prove" class="w-full bg-felt-950 border border-felt-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <option value="15">15 seconds</option>
+                            <option value="30" selected>30 seconds</option>
+                            <option value="45">45 seconds</option>
+                            <option value="60">60 seconds</option>
+                            <option value="90">90 seconds</option>
+                            <option value="0">No Limit</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 pt-2">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Face Cards Value</label>
+                        <select id="setting-face" class="w-full bg-felt-950 border border-felt-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <option value="standard" selected>J=11, Q=12, K=13, A=1</option>
+                            <option value="ones">J, Q, K = 10, A = 1</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="startGame()" class="w-full bg-amber-500 hover:bg-amber-400 text-felt-950 font-bold py-3 px-4 rounded-xl shadow-lg transition-all transform active:scale-95">
+                Deal Cards & Start Game
+            </button>
+        </div>
+
+        <!-- GAMEPLAY SCREEN -->
+        <div id="screen-game" class="hidden flex flex-col space-y-6">
+
+            <!-- Top Dashboard / Round Stats -->
+            <div class="flex justify-between items-center bg-felt-900/60 border border-felt-800 rounded-xl p-4">
+                <div class="flex items-center space-x-4">
+                    <div>
+                        <span class="text-xs text-slate-400 block uppercase">Round</span>
+                        <span id="lbl-round" class="text-lg font-bold text-amber-400 mono">1</span>
+                    </div>
+                    <div class="h-8 w-px bg-felt-800"></div>
+                    <div>
+                        <span class="text-xs text-slate-400 block uppercase">Phase</span>
+                        <span id="lbl-phase-name" class="text-sm font-semibold text-slate-200">Claiming</span>
+                    </div>
+                </div>
+                <div id="timer-box" class="flex items-center space-x-2 bg-felt-950 px-4 py-2 rounded-lg border border-felt-800">
+                    <svg class="w-4 h-4 text-amber-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span id="lbl-timer" class="mono font-bold text-amber-400 text-lg">30</span><span class="text-xs text-slate-500">s</span>
+                </div>
+            </div>
+
+            <!-- Central Card Table -->
+            <div class="bg-felt-900/90 border border-felt-800 rounded-2xl p-8 shadow-2xl flex flex-col items-center relative overflow-hidden">
+                <div class="absolute top-3 left-4 text-xs text-slate-500 uppercase tracking-widest font-mono">Drawn Cards (All 4 must be used)</div>
+
+                <!-- 4 Cards Display -->
+                <div id="cards-container" class="grid grid-cols-2 sm:grid-cols-4 gap-4 my-6 w-full max-w-2xl">
+                    <!-- Cards injected dynamically -->
+                </div>
+
+                <!-- Claim Status / Banner -->
+                <div id="claim-banner" class="w-full bg-felt-950/80 border border-felt-800 rounded-xl p-4 text-center">
+                    <p id="claim-banner-text" class="text-slate-300 text-sm">Waiting for players to claim Possible or Impossible...</p>
+                </div>
+            </div>
+
+            <!-- Action Controls / Panels per Phase -->
+            <div id="phase-controls" class="bg-felt-900/90 border border-felt-800 rounded-2xl p-6 shadow-xl">
+                <!-- Dynamically populated based on turn/phase -->
+            </div>
+
+            <!-- Players Sidebar / Scoreboard -->
+            <div class="bg-felt-900/60 border border-felt-800 rounded-xl p-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Players & Penalties</h3>
+                <div id="players-scoreboard" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <!-- Scoreboard items -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ROUND SUMMARY / PROOF MODAL / SCREEN -->
+        <div id="screen-summary" class="hidden bg-felt-900 border border-felt-800 rounded-2xl p-8 max-w-xl mx-auto w-full shadow-2xl text-center">
+            <h2 id="summary-title" class="text-2xl font-bold mb-2 text-amber-100">Round Results</h2>
+            <p id="summary-desc" class="text-slate-300 mb-6 text-sm">Explanation of what happened and who lost points.</p>
+
+            <div id="summary-details" class="bg-felt-950 p-4 rounded-xl text-left mono text-xs mb-6 border border-felt-800 max-h-40 overflow-y-auto">
+                <!-- Details -->
+            </div>
+
+            <button onclick="nextRound()" class="w-full bg-amber-500 hover:bg-amber-400 text-felt-950 font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
+                Next Round
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-4 text-xs text-slate-500 border-t border-felt-900">
+        24-Bluff Card Game • Standard 52-Card Deck Rules
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Game State
+        let state = {
+            players: [],
+            round: 1,
+            cards: [], // [{suit, value, display, valNum}]
+            phase: 'setup', // 'setup', 'claim', 'second', 'accuse_or_prove', 'summary'
+            timer: 30,
+            timerInterval: null,
+            claims: [], // [{playerIndex, type: 'possible'|'impossible', timestamp}]
+            seconds: [], // playerIndices who seconded
+            accidents: [], // accusations
+            proof: { solver: null, expr: '', valid: false },
+            settings: { timerClaim: 30, timerSecond: 20, timerProve: 30, face: 'standard' }
+        };
+
+        const SUITS = ['♠', '♣', '♥', '♦'];
+        const SUIT_COLORS = { '♠': 'text-slate-900', '♣': 'text-slate-900', '♥': 'text-rose-600', '♦': 'text-rose-600' };
+
+        function addPlayerInput() {
+            const container = document.getElementById('player-inputs');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2';
+            div.innerHTML = `
+                <input type="text" placeholder="Player Name" class="player-name-input flex-grow bg-felt-950 border border-felt-800 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-amber-500">
+                <button onclick="removePlayerInput(this)" class="px-3 py-2 bg-red-950/50 hover:bg-red-900 text-red-300 rounded-lg border border-red-800 text-sm">✕</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function removePlayerInput(btn) {
+            if(document.querySelectorAll('.player-name-input').length > 2) {
+                btn.parentElement.remove();
+            } else {
+                alert('Minimum 2 players required.');
+            }
+        }
+
+        function startGame() {
+            const nameInputs = document.querySelectorAll('.player-name-input');
+            state.players = [];
+            nameInputs.forEach((input, idx) => {
+                const name = input.value.trim() || `Player ${idx+1}`;
+                state.players.push({ name: name, losses: 0, id: idx });
+            });
+
+            state.settings.timerClaim = parseInt(document.getElementById('setting-timer-claim').value);
+            state.settings.timerSecond = parseInt(document.getElementById('setting-timer-second').value);
+            state.settings.timerProve = parseInt(document.getElementById('setting-timer-prove').value);
+            state.settings.face = document.getElementById('setting-face').value;
+            state.round = 1;
+
+            document.getElementById('screen-setup').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('hidden');
+            document.getElementById('game-status-badge').textContent = 'In Progress';
+
+            startNewRound();
+        }
+
+        function dealCards() {
+            // Generate random 4 cards from standard 52 deck
+            let deck = [];
+            for(let s of SUITS) {
+                for(let v = 1; v <= 13; v++) {
+                    deck.push({ suit: s, val: v });
+                }
+            }
+            // Shuffle
+            deck.sort(() => Math.random() - 0.5);
+            let drawn = deck.slice(0, 4);
+
+            return drawn.map(c => {
+                let valNum = c.val;
+                if(state.settings.face === 'standard') {
+                    // A=1, J=11, Q=12, K=13
+                    valNum = c.val;
+                } else {
+                    if(c.val > 10) valNum = 10; // J,Q,K = 10
+                }
+
+                let displayVal = c.val;
+                if(c.val === 1) displayVal = 'A';
+                if(c.val === 11) displayVal = 'J';
+                if(c.val === 12) displayVal = 'Q';
+                if(c.val === 13) displayVal = 'K';
+
+                return {
+                    suit: c.suit,
+                    valNum: valNum,
+                    display: displayVal
+                };
+            });
+        }
+
+        function startNewRound() {
+            state.cards = dealCards();
+            state.claims = [];
+            state.seconds = [];
+            state.accidents = [];
+            state.proof = { solver: null, expr: '', valid: false };
+            state.phase = 'claim';
+
+            updateScoreboard();
+            renderGameUI();
+            startTimer(state.settings.timerClaim, onClaimTimeout);
+        }
+
+        function startTimer(seconds, onExpire) {
+            clearInterval(state.timerInterval);
+            if(seconds === 0) {
+                document.getElementById('timer-box').classList.add('hidden');
+                return;
+            }
+            document.getElementById('timer-box').classList.remove('hidden');
+            state.timer = seconds;
+            document.getElementById('lbl-timer').textContent = state.timer;
+
+            state.timerInterval = setInterval(() => {
+                state.timer--;
+                document.getElementById('lbl-timer').textContent = state.timer;
+                if(state.timer <= 0) {
+                    clearInterval(state.timerInterval);
+                    if(onExpire) onExpire();
+                }
+            }, 1000);
+        }
+
+        function renderCards() {
+            const container = document.getElementById('cards-container');
+            container.innerHTML = '';
+            state.cards.forEach(c => {
+                const isRed = c.suit === '♥' || c.suit === '♦';
+                const div = document.createElement('div');
+                div.className = `bg-slate-50 border-2 border-slate-300 rounded-xl p-4 flex flex-col justify-between h-32 card-shadow text-slate-900 font-bold relative`;
+                div.innerHTML = `
+                    <div class="text-lg leading-none ${isRed ? 'text-red-600' : 'text-slate-900'} mono">${c.display}</div>
+                    <div class="text-4xl text-center my-auto ${isRed ? 'text-red-600' : 'text-slate-900'}">${c.suit}</div>
+                    <div class="text-lg leading-none text-right ${isRed ? 'text-red-600' : 'text-slate-900'} mono rotate-180">${c.display}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function updateScoreboard() {
+            const sb = document.getElementById('players-scoreboard');
+            sb.innerHTML = '';
+            state.players.forEach(p => {
+                const div = document.createElement('div');
+                div.className = `bg-felt-950 border border-felt-800 rounded-lg p-3 flex flex-col justify-between`;
+                div.innerHTML = `
+                    <div class="font-semibold text-sm text-slate-200 truncate">${p.name}</div>
+                    <div class="flex justify-between items-end mt-2">
+                        <span class="text-xs text-slate-400">Losses</span>
+                        <span class="mono font-bold text-amber-400 text-base">${p.losses}</span>
+                    </div>
+                `;
+                sb.appendChild(div);
+            });
+        }
+
+        function renderGameUI() {
+            renderCards();
+            document.getElementById('lbl-round').textContent = state.round;
+
+            const phaseName = document.getElementById('lbl-phase-name');
+            const controls = document.getElementById('phase-controls');
+            const bannerText = document.getElementById('claim-banner-text');
+
+            if(state.phase === 'claim') {
+                phaseName.textContent = 'Claim Phase (Possible / Impossible)';
+                bannerText.textContent = state.claims.length === 0 ?
+                    'Be the first player to claim whether 24 is possible or impossible!' :
+                    `First claim made by ${state.players[state.claims[0].playerIndex].name} (${state.claims[0].type.toUpperCase()}). Others can now Second or Claim!`;
+
+                let html = `<h4 class="text-sm font-bold text-amber-100 mb-4">Make Your Claim</h4><div class="grid grid-cols-1 sm:grid-cols-2 gap-4">`;
+                state.players.forEach((p, idx) => {
+                    const alreadyClaimed = state.claims.some(c => c.playerIndex === idx);
+                    htmlitts = `
+                        <div class="bg-felt-950 border border-felt-800 rounded-xl p-4 flex flex-col justify-between">
+                            <span class="font-semibold text-sm text-slate-200 mb-3">${p.name}</span>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="makeClaim(${idx}, 'possible')" ${alreadyClaimed ? 'disabled' : ''} class="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-30 text-white font-semibold py-2 px-3 rounded-lg text-xs transition">Possible</button>
+                                <button onclick="makeClaim(${idx}, 'impossible')" ${alreadyClaimed ? 'disabled' : ''} class="bg-rose-700 hover:bg-rose-600 disabled:opacity-30 text-white font-semibold py-2 px-3 rounded-lg text-xs transition">Impossible</button>
+                            </div>
+                        </div>
+                    `;
+                    html += htmlitts;
+                });
+                html += `</div>`;
+                controls.innerHTML = html;
+            }
+            else if(state.phase === 'second_or_accuse') {
+                phaseName.textContent = 'Second / Accuse Phase';
+                const firstClaim = state.claims[0];
+                const claimant = state.players[firstClaim.playerIndex];
+                bannerText.textContent = `${claimant.name} claimed it is ${firstClaim.type.toUpperCase()}! Other players may Second or Accuse.`;
+
+                let html = `<h4 class="text-sm font-bold text-amber-100 mb-4">Player Responses</h4><div class="space-y-3">`;
+
+                state.players.forEach((p, idx) => {
+                    if(idx === firstClaim.playerIndex) return; // skip first claimant
+                    const isSeconded = state.seconds.includes(idx);
+
+                    html += `
+                        <div class="bg-felt-950 border border-felt-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+                            <span class="font-semibold text-sm text-slate-200 w-32">${p.name}</span>
+                            <div class="flex items-center gap-2">
+                                <button onclick="toggleSecond(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-semibold border ${isSeconded ? 'bg-amber-500 text-felt-950 border-amber-400' : 'bg-felt-900 text-slate-300 border-felt-800 hover:bg-felt-800'}">
+                                    ${isSeconded ? '✓ Seconded' : 'Second First Player'}
+                                </button>
+                                ${firstClaim.type === 'possible' ? `
+                                    <button onclick="accusePlayer(${idx}, ${firstClaim.playerIndex})" class="px-3 py-1.5 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg text-xs font-semibold">
+                                        Accuse of Lying
+                                    </button>
+                                ` : `
+                                    <button onclick="provePossible(${idx})" class="px-3 py-1.5 bg-blue-950 hover:bg-blue-900 text-blue-300 border border-blue-800 rounded-lg text-xs font-semibold">
+                                        Prove Possible!
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div><div class="mt-6 flex justify-end">
+                    <button onclick="finalizeResponses()" class="bg-amber-500 hover:bg-amber-400 text-felt-950 font-bold py-2.5 px-6 rounded-xl text-sm">
+                        Proceed to Resolution →
+                    </button>
+                </div>`;
+                controls.innerHTML = html;
+            }
+            else if(state.phase === 'prove_solution') {
+                phaseName.textContent = 'Proof Required!';
+                const targetPlayer = state.proof.solver !== null ? state.players[state.proof.solver] : state.players[state.claims[0].playerIndex];
+                bannerText.textContent = `${targetPlayer.name} must provide a mathematical expression using all 4 cards that evaluates to 24.`;
+
+                controls.innerHTML = `
+                    <div class="max-w-md mx-auto">
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Arithmetic Expression (e.g. (6+6)*(2/1))</label>
+                        <div class="flex gap-2 mb-3">
+                            <input type="text" id="expr-input" placeholder="Enter formula..." class="flex-grow mono bg-felt-950 border border-felt-800 rounded-lg px-4 py-2.5 text-sm text-amber-300 focus:outline-none focus:border-amber-500">
+                            <button onclick="submitProof(${targetPlayer.id})" class="bg-amber-500 hover:bg-amber-400 text-felt-950 font-bold px-5 py-2.5 rounded-lg text-sm">Prove</button>
+                        </div>
+                        <p class="text-xs text-slate-500">Available numbers: ${state.cards.map(c => c.valNum).join(', ')} (Each must be used exactly once).</p>
+                    </div>
+                `;
+            }
+        }
+
+        function makeClaim(playerIndex, type) {
+            if(state.claims.length === 0) {
+                // First claim!
+                state.claims.push({ playerIndex, type, time: Date.now() });
+                // If 2 player game or standard rule, move to second/accuse phase or check timer
+                if(state.players.length <= 2) {
+                    // In 2 player game, if player 1 claims impossible, player 2 must prove possible or lose.
+                    if(type === 'impossible') {
+                        state.phase = 'prove_solution';
+                        state.proof.solver = (playerIndex === 0) ? 1 : 0; // Other player must prove possible
+                        renderGameUI();
+                        startTimer(state.settings.timerProve, () => handleTimeoutLoss(state.proof.solver));
+                        return;
+                    }
+                }
+                state.phase = 'second_or_accuse';
+                renderGameUI();
+                startTimer(state.settings.timerSecond, finalizeResponses);
+            } else {
+                // Subsequent claim
+                state.claims.push({ playerIndex, type, time: Date.now() });
+                renderGameUI();
+            }
+        }
+
+        function onClaimTimeout() {
+            if(state.claims.length === 0) {
+                // Nobody claimed in time -> everyone loses or round is a draw/penalty
+                endRoundSummary("No one made a claim in time! Everyone takes a loss.", []);
+            } else {
+                finalizeResponses();
+            }
+        }
+
+        function toggleSecond(playerIndex) {
+            const idx = state.seconds.indexOf(playerIndex);
+            if(idx > -1) {
+                state.seconds.splice(idx, 1);
+            } else {
+                state.seconds.push(playerIndex);
+            }
+            renderGameUI();
+        }
+
+        function accusePlayer(accuserIndex, accusedIndex) {
+            // Accused must prove by solving to 24
+            state.proof.solver = accusedIndex;
+            state.phase = 'prove_solution';
+            renderGameUI();
+            startTimer(state.settings.timerProve, () => handleAccusationTimeout(accusedIndex, accuserIndex));
+        }
+
+        function provePossible(challengerIndex) {
+            // Challenger claims it's possible when first player claimed impossible
+            state.proof.solver = challengerIndex;
+            state.phase = 'prove_solution';
+            renderGameUI();
+            startTimer(state.settings.timerProve, () => handleChallengeTimeout(challengerIndex));
+        }
+
+        function finalizeResponses() {
+            clearInterval(state.timerInterval);
+            const firstClaim = state.claims[0];
+
+            if(firstClaim.type === 'possible') {
+                // First player claimed possible. They need to prove it!
+                state.proof.solver = firstClaim.playerIndex;
+                state.phase = 'prove_solution';
+                renderGameUI();
+                startTimer(state.settings.timerProve, () => handleClaimantProofTimeout(firstClaim.playerIndex));
+            } else {
+                // Claimed impossible. Let's verify if it's ACTUALLY impossible or possible.
+                // For game engine simplicity, we check if any solution exists.
+                let solution = solve24(state.cards.map(c => c.valNum));
+                if(solution) {
+                    // It WAS possible! The claimant lied (or failed impossible claim). Claimant loses!
+                    let losers = [firstClaim.playerIndex];
+                    // Anyone who seconded the impossible claim also loses!
+                    state.seconds.forEach(s => losers.push(s));
+                    endRoundSummary(`The claim of IMPOSSIBLE was FALSE! A solution exists: <span class="mono text-amber-400">${solution}</span>. Claimant(s) lose!`, losers);
+                } else {
+                    // It was truly IMPOSSIBLE! Claimant wins, everyone else (except seconders of impossible) loses.
+                    let losers = state.players.map(p => p.id).filter(id => id !== firstClaim.playerIndex && !state.seconds.includes(id));
+                    endRoundSummary(`The claim of IMPOSSIBLE was TRUE! No solution exists. Non-believers lose!`, losers);
+                }
+            }
+        }
+
+        function submitProof(solverId) {
+            const expr = document.getElementById('expr-input').value.trim();
+            const numbers = state.cards.map(c => c.valNum);
+
+            const validation = validateExpression(expr, numbers);
+            if(validation.success) {
+                // Proof is correct!
+                let losers = [];
+                const firstClaim = state.claims[0];
+
+                if(firstClaim.type === 'impossible') {
+                    // Challenger proved it is possible -> Claimant and seconders lose!
+                    losers.push(firstClaim.playerIndex);
+                    state.seconds.forEach(s => losers.push(s));
+                } else {
+                    // Claimant proved possible -> Anyone who accused them or didn't second (depending on rules, slower/accusers) loses.
+                    // In standard 2-player or multi-player: accusers lose if proof succeeds.
+                    state.players.forEach(p => {
+                        if(p.id !== solverId && !state.seconds.includes(p.id)) {
+                            losers.push(p.id);
+                        }
+                    });
+                }
+                endRoundSummary(`Successful proof by ${state.players[solverId].name}: <span class="mono text-amber-400">${expr} = 24</span>!`, losers);
+            } else {
+                alert(`Invalid proof: ${validation.error}`);
+            }
+        }
+
+        function handleClaimantProofTimeout(solverId) {
+            endRoundSummary(`${state.players[solverId].name} ran out of time to prove the solution! They lose.`, [solverId]);
+        }
+        function handleTimeoutLoss(solverId) {
+            endRoundSummary(`Time ran out for ${state.players[solverId].name}! They lose.`, [solverId]);
+        }
+        function handleAccusationTimeout(accusedId, accuserKey) {
+            endRoundSummary(`${state.players[accusedId].name} failed to prove in time and loses the accusation!`, [accusedId]);
+        }
+        function handleChallengeTimeout(challengerId) {
+            endRoundSummary(`${state.players[challengerId].name} failed to prove the impossible card set was possible in time!`, [challengerId]);
+        }
+
+        function endRoundSummary(titleHtml, loserIds) {
+            clearInterval(state.timerInterval);
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-summary').classList.remove('hidden');
+
+            document.getElementById('summary-title').innerHTML = titleHtml;
+
+            let details = `Drawn Cards: ${state.cards.map(c => c.display + c.suit).join(', ')}<br>`;
+            let solution = solve24(state.cards.map(c => c.valNum));
+            details += `Possible Solution: ${solution ? solution : 'None (Truly Impossible)'}<br><br>`;
+
+            let loserNames = [];
+            loserIds.forEach(id => {
+                let p = state.players.find(pl => pl.id === id);
+                if(p) {
+                    p.losses++;
+                    loserNames.push(p.name);
+                }
+            });
+
+            details += `Loser(s) this round: <strong>${loserNames.length > 0 ? loserNames.join(', ') : 'None'}</strong>`;
+            document.getElementById('summary-details').innerHTML = details;
+            updateScoreboard();
+        }
+
+        function nextRound() {
+            state.round++;
+            document.getElementById('screen-summary').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('hidden');
+            startNewRound();
+        }
+
+        // --- 24 Game Solver & Validator Engine ---
+        function validateExpression(expr, originalNumbers) {
+            // Extract numbers from expression
+            let numsInExpr = expr.match(/\d+/g);
+            if(!numsInExpr) return { success: false, error: "No numbers found in expression." };
+
+            let parsedNums = numsInExpr.map(n => parseInt(n));
+            if(parsedNums.length !== originalNumbers.length) {
+                return { success: false, error: `You must use exactly ${originalNumbers.length} numbers.` };
+            }
+
+            // Check if numbers match set
+            let remaining = [...originalNumbers];
+            for(let n of parsedNums) {
+                let idx = remaining.indexOf(n);
+                if(idx > -1) {
+                    remaining.splice(idx, 1);
+                } else {
+                    return { success: false, error: `Number ${n} was not in the drawn cards or used incorrectly.` };
+                }
+            }
+
+            // Evaluate math safely
+            try {
+                // Sanitize expr to only allow digits, arithmetic operators, and parentheses
+                if(/[^0-9+\-*/().\s]/.test(expr)) {
+                    return { success: false, error: "Expression contains invalid characters." };
+                }
+                let val = Function(`return (${expr})`)();
+                if(Math.abs(val - 24) < 0.0001) {
+                    return { success: true };
+                } else {
+                    return { success: false, error: `Expression evaluates to ${val}, not 24.` };
+                }
+            } catch(e) {
+                return { success: false, error: "Malformed mathematical expression." };
+            }
+        }
+
+        function solve24(nums) {
+            // Simple recursive solver to find a 24 solution for display in summary
+            function getExprs(list) {
+                if (list.length === 1) {
+                    if (Math.abs(list[0].val - 24) < 0.0001) return [list[0].expr];
+                    return [];
+                }
+                let res = [];
+                for (let i = 0; i < list.length; i++) {
+                    for (let j = 0; j < list.length; j++) {
+                        if (i === j) continue;
+                        let rest = [];
+                        for (let k = 0; k < list.length; k++) if (k !== i && k !== j) rest.push(list[k]);
+
+                        let a = list[i], b = list[j];
+                        let combos = [
+                            { val: a.val + b.val, expr: `(${a.expr}+${b.expr})` },
+                            { val: a.val * b.val, expr: `(${a.expr}*${b.expr})` },
+                            { val: a.val - b.val, expr: `(${a.expr}-${b.expr})` },
+                            { val: b.val - a.val, expr: `(${b.expr}-${a.expr})` }
+                        ];
+                        if (b.val !== 0) combos.push({ val: a.val / b.val, expr: `(${a.expr}/${b.expr})` });
+                        if (a.val !== 0) combos.push({ val: b.val / a.val, expr: `(${b.expr}/${a.val})` });
+
+                        for (let c of combos) {
+                            let sub = getExprs([c, ...rest]);
+                            if (sub.length > 0) return sub;
+                        }
+                    }
+                }
+                return [];
+            }
+
+            let initial = nums.map(n => ({ val: n, expr: n.toString() }));
+            let solutions = getExprs(initial);
+            return solutions.length > 0 ? solutions[0] : null;
+        }
+    </script>
+</body>
+</html>
