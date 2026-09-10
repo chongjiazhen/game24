@@ -294,6 +294,8 @@
             state.proof = { solver: null, expr: '', valid: false };
             // Track which players have taken action (Second or Accuse)
             state.playersActed = new Array(state.players.length).fill(false);
+            // Track solver submission times for penalty
+            state.solverTimes = [];
             state.phase = 'claim';
 
             updateScoreboard();
@@ -403,7 +405,7 @@
                             <div class="flex items-center gap-2">
                                 <button onclick="toggleSecond(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-semibold border ${isSeconded ? 'bg-amber-500 text-felt-950 border-amber-400' : 'bg-felt-900 text-slate-300 border-felt-800 hover:bg-felt-800'}">
                                     ${isSeconded ? '✓ Seconded' : 'Second First Player'}
-                        <span class="text-xs text-slate-500 ml-2">(any player can finalize)</span>                                </button>
+                        <span class="text-xs text-slate-500 ml-2" title="Finalizing checks the math and decides the round - anyone can press this button">(any player can finalize)</span>                                </button>
                                 ${firstClaim.type === 'possible' ? `
                                     <button onclick="accusePlayer(${idx}, ${firstClaim.playerIndex})" class="px-3 py-1.5 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg text-xs font-semibold">
                                         Accuse of Lying
@@ -535,12 +537,12 @@
                 const firstClaim = state.claims[0];
 
                 if(firstClaim.type === 'impossible') {
-                    // Challenger proved it is possible -> Claimant and seconders lose!
+                    // Challenger (solverId) proved it is possible -> Claimant (P1) and seconders lose!
                     losers.push(firstClaim.playerIndex);
                     state.seconds.forEach(s => losers.push(s));
                 } else {
-                    // Claimant proved possible -> Anyone who accused them or didn't second (depending on rules, slower/accusers) loses.
-                    // In standard 2-player or multi-player: accusers lose if proof succeeds.
+                    // Claimant (solverId) proved possible -> Everyone else who didn't second loses
+                    // In a 2-player game, this naturally means the slower player (P2) loses
                     state.players.forEach(p => {
                         if(p.id !== solverId && !state.seconds.includes(p.id)) {
                             losers.push(p.id);
@@ -554,13 +556,15 @@
         }
 
         function handleClaimantProofTimeout(solverId) {
-            endRoundSummary(`${state.players[solverId].name} ran out of time to prove the solution! They lose.`, [solverId]);
+            let losers = [solverId, ...state.seconds];
+            endRoundSummary(`${state.players[solverId].name} ran out of time to prove! Claimant & seconders lose.`, losers);
         }
         function handleTimeoutLoss(solverId) {
             endRoundSummary(`Time ran out for ${state.players[solverId].name}! They lose.`, [solverId]);
         }
         function handleAccusationTimeout(accusedId, accuserKey) {
-            endRoundSummary(`${state.players[accusedId].name} failed to prove in time and loses the accusation!`, [accusedId]);
+            let losers = [accusedId, ...state.seconds];
+            endRoundSummary(`${state.players[accusedId].name} failed to prove in time! Accused and seconders lose.`, losers);
         }
         function handleChallengeTimeout(challengerId) {
             endRoundSummary(`${state.players[challengerId].name} failed to prove the impossible card set was possible in time!`, [challengerId]);
@@ -589,8 +593,17 @@
                 details += `Possible Solution: None (Truly Impossible)<br><br>`;
             }
 
+            // Deduplicate loser IDs
+            let uniqueLosers = [...new Set(loserIds)];
+
+            // In a 2-player game, if only one person is missing from losers and a proof was made,
+            // the other person (slower player) should be added if they weren't the solver.
+            if(state.players.length === 2 && uniqueLosers.length === 0 && state.proof.solver !== null) {
+                uniqueLosers.push(state.proof.solver === 0 ? 1 : 0);
+            }
+
             let loserNames = [];
-            loserIds.forEach(id => {
+            uniqueLosers.forEach(id => {
                 let p = state.players.find(pl => pl.id === id);
                 if(p) {
                     p.losses++;
