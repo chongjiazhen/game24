@@ -28,7 +28,7 @@
 <body class="bg-felt-950 text-slate-100 min-h-screen flex flex-col justify-between select-none">
 
     <!-- Header -->
-    <header class="bg-felt-900 border-b border-felt-800 px-6 py-4 flex justify-between items-center shadow-md">
+    <header class="bg-felt-900 border-b border-felt-800 px-4 sm:px-6 py-4 flex flex-wrap gap-2 justify-between items-center shadow-md">
         <div class="flex items-center space-x-3">
             <div class="bg-amber-500 text-felt-950 font-bold px-3 py-1.5 rounded-lg text-lg mono shadow">24</div>
             <h1 class="text-xl font-bold tracking-tight text-amber-100">Bluff & Fact <span class="text-xs uppercase bg-felt-800 text-amber-400 px-2 py-0.5 rounded ml-2 border border-felt-700">Card Game</span></h1>
@@ -129,16 +129,16 @@
         <div id="screen-game" class="hidden flex flex-col space-y-6">
 
             <!-- Top Dashboard / Round Stats -->
-            <div class="flex justify-between items-center bg-felt-900/60 border border-felt-800 rounded-xl p-4">
-                <div class="flex items-center space-x-4">
+            <div class="flex flex-wrap gap-3 justify-between items-center bg-felt-900/60 border border-felt-800 rounded-xl p-4">
+                <div class="flex items-center space-x-4 min-w-0">
                     <div>
                         <span class="text-xs text-slate-400 block uppercase">Round</span>
                         <span id="lbl-round" class="text-lg font-bold text-amber-400 mono">1</span>
                     </div>
                     <div class="h-8 w-px bg-felt-800"></div>
-                    <div>
+                    <div class="min-w-0">
                         <span class="text-xs text-slate-400 block uppercase">Phase</span>
-                        <span id="lbl-phase-name" class="text-sm font-semibold text-slate-200">Claiming</span>
+                        <span id="lbl-phase-name" class="text-sm font-semibold text-slate-200 break-words">Claiming</span>
                     </div>
                 </div>
                 <div id="timer-box" class="flex items-center space-x-2 bg-felt-950 px-4 py-2 rounded-lg border border-felt-800">
@@ -148,11 +148,11 @@
             </div>
 
             <!-- Central Card Table -->
-            <div class="bg-felt-900/90 border border-felt-800 rounded-2xl p-8 shadow-2xl flex flex-col items-center relative overflow-hidden">
+            <div class="bg-felt-900/90 border border-felt-800 rounded-2xl p-4 pt-8 sm:p-8 shadow-2xl flex flex-col items-center relative overflow-hidden">
                 <div class="absolute top-3 left-4 text-xs text-slate-500 uppercase tracking-widest font-mono">Drawn Cards (All 4 must be used)</div>
 
                 <!-- 4 Cards Display -->
-                <div id="cards-container" class="grid grid-cols-2 sm:grid-cols-4 gap-4 my-6 w-full max-w-2xl">
+                <div id="cards-container" class="grid grid-cols-4 gap-2 sm:gap-4 my-4 sm:my-6 w-full max-w-2xl">
                     <!-- Cards injected dynamically -->
                 </div>
 
@@ -363,11 +363,11 @@
             state.cards.forEach(c => {
                 const isRed = c.suit === '♥' || c.suit === '♦';
                 const div = document.createElement('div');
-                div.className = `bg-slate-50 border-2 border-slate-300 rounded-xl p-4 flex flex-col justify-between h-32 card-shadow text-slate-900 font-bold relative`;
+                div.className = `bg-slate-50 border-2 border-slate-300 rounded-lg sm:rounded-xl p-2 sm:p-4 flex flex-col justify-between aspect-[5/7] min-w-0 card-shadow text-slate-900 font-bold relative`;
                 div.innerHTML = `
-                    <div class="text-lg leading-none ${isRed ? 'text-red-600' : 'text-slate-900'} mono">${c.display}</div>
-                    <div class="text-4xl text-center my-auto ${isRed ? 'text-red-600' : 'text-slate-900'}">${c.suit}</div>
-                    <div class="text-lg leading-none text-right ${isRed ? 'text-red-600' : 'text-slate-900'} mono rotate-180">${c.display}</div>
+                    <div class="text-base sm:text-lg leading-none ${isRed ? 'text-red-600' : 'text-slate-900'} mono">${c.display}</div>
+                    <div class="text-3xl sm:text-4xl text-center my-auto ${isRed ? 'text-red-600' : 'text-slate-900'}">${c.suit}</div>
+                    <div class="text-base sm:text-lg leading-none text-right ${isRed ? 'text-red-600' : 'text-slate-900'} mono rotate-180">${c.display}</div>
                 `;
                 container.appendChild(div);
             });
@@ -399,7 +399,7 @@
             const bannerText = document.getElementById('claim-banner-text');
 
             if(state.phase === 'claim') {
-                phaseName.textContent = 'Claim Phase (Possible / Impossible)';
+                phaseName.textContent = 'Claim';
                 bannerText.textContent = state.claims.length === 0 ?
                     'Be the first player to claim whether 24 is possible or impossible!' :
                     `First claim made by ${state.players[state.claims[0].playerIndex].name} (${state.claims[0].type.toUpperCase()}). Others can now Back or Challenge!`;
@@ -422,7 +422,7 @@
                 controls.innerHTML = html;
             }
             else if(state.phase === 'second_or_accuse') {
-                phaseName.textContent = 'Back / Challenge Phase';
+                phaseName.textContent = 'Back / Challenge';
                 const firstClaim = state.claims[0];
                 const claimant = state.players[firstClaim.playerIndex];
                 bannerText.textContent = `${claimant.name} claimed it is ${firstClaim.type.toUpperCase()}! Other players may Back or Challenge.`;
@@ -478,7 +478,7 @@
                 controls.innerHTML = html;
             }
             else if(state.phase === 'prove_solution') {
-                phaseName.textContent = 'Proof Required!';
+                phaseName.textContent = 'Prove';
                 const targetPlayer = state.proof.solver !== null ? state.players[state.proof.solver] : state.players[state.claims[0].playerIndex];
                 bannerText.textContent = `${targetPlayer.name} must provide a mathematical expression using all 4 cards that evaluates to 24.`;
 
