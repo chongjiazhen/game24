@@ -292,6 +292,8 @@
             state.seconds = [];
             state.accidents = [];
             state.proof = { solver: null, expr: '', valid: false };
+            // Track which players have taken action (Second or Accuse)
+            state.playersActed = new Array(state.players.length).fill(false);
             state.phase = 'claim';
 
             updateScoreboard();
@@ -401,7 +403,7 @@
                             <div class="flex items-center gap-2">
                                 <button onclick="toggleSecond(${idx})" class="px-3 py-1.5 rounded-lg text-xs font-semibold border ${isSeconded ? 'bg-amber-500 text-felt-950 border-amber-400' : 'bg-felt-900 text-slate-300 border-felt-800 hover:bg-felt-800'}">
                                     ${isSeconded ? '✓ Seconded' : 'Second First Player'}
-                                </button>
+                        <span class="text-xs text-slate-500 ml-2">(any player can finalize)</span>                                </button>
                                 ${firstClaim.type === 'possible' ? `
                                     <button onclick="accusePlayer(${idx}, ${firstClaim.playerIndex})" class="px-3 py-1.5 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg text-xs font-semibold">
                                         Accuse of Lying
@@ -416,10 +418,11 @@
                     `;
                 });
 
-                html += `</div><div class="mt-6 flex justify-end">
+                html += `</div><div class="mt-6 flex justify-end gap-3">
                     <button onclick="finalizeResponses()" class="bg-amber-500 hover:bg-amber-400 text-felt-950 font-bold py-2.5 px-6 rounded-xl text-sm">
-                        Proceed to Resolution →
+                        Finalize Response
                     </button>
+                    <span class="text-xs text-slate-500 self-center">Anyone can finalize when ready</span>
                 </div>`;
                 controls.innerHTML = html;
             }
@@ -446,16 +449,8 @@
                 // First claim!
                 state.claims.push({ playerIndex, type, time: Date.now() });
                 // If 2 player game or standard rule, move to second/accuse phase or check timer
-                if(state.players.length <= 2) {
-                    // In 2 player game, if player 1 claims impossible, player 2 must prove possible or lose.
-                    if(type === 'impossible') {
-                        state.phase = 'prove_solution';
-                        state.proof.solver = (playerIndex === 0) ? 1 : 0; // Other player must prove possible
-                        renderGameUI();
-                        startTimer(state.settings.timerProve, () => handleTimeoutLoss(state.proof.solver));
-                        return;
-                    }
-                }
+                // Remove 2-player special case - all players can Second or Accuse normally
+                // In 2-player, the opponent can still Second or Accuse; no forced proof phase.
                 state.phase = 'second_or_accuse';
                 renderGameUI();
                 startTimer(state.settings.timerSecond, finalizeResponses);
