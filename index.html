@@ -209,10 +209,8 @@
             phase: 'setup', // 'setup', 'claim', 'second', 'accuse_or_prove', 'summary'
             timer: 30,
             timerInterval: null,
-            claims: [], // [{playerIndex, type: 'possible'|'impossible', timestamp}]
+            claims: [], // [{playerIndex, type: 'possible'|'impossible', time}] - only the first claim matters
             backers: [], // playerIndices who back the claim
-            actionOrder: [], // order in which players backed the claim
-            accidents: [], // accusations
             proof: { solver: null, challenger: null, target: null, mode: null },
             settings: { timerClaim: 30, timerSecond: 20, timerProve: 30, face: 'standard', deckMode: 'persist' }
         };
@@ -322,14 +320,8 @@
             state.cards = drawCards(4);
             state.claims = [];
             state.backers = [];
-            state.actionOrder = [];
-            state.accidents = [];
             state.proof = { solver: null, challenger: null, target: null, mode: null };
             state.proveFail = null;
-            // Track which players have taken action (Back or Challenge)
-            state.playersActed = new Array(state.players.length).fill(false);
-            // Track solver submission times for penalty
-            state.solverTimes = [];
             state.phase = 'claim';
 
             updateScoreboard();
@@ -400,14 +392,12 @@
 
             if(state.phase === 'claim') {
                 phaseName.textContent = 'Claim';
-                bannerText.textContent = state.claims.length === 0 ?
-                    'Be the first player to claim whether 24 is possible or impossible!' :
-                    `First claim made by ${state.players[state.claims[0].playerIndex].name} (${state.claims[0].type.toUpperCase()}). Others can now Back or Challenge!`;
+                bannerText.textContent = 'Be the first player to claim whether 24 is possible or impossible!';
 
                 let html = `<h4 class="text-sm font-bold text-amber-100 mb-4">Make Your Claim</h4><div class="grid grid-cols-1 sm:grid-cols-2 gap-4">`;
                 state.players.forEach((p, idx) => {
                     const alreadyClaimed = state.claims.some(c => c.playerIndex === idx);
-                    htmlitts = `
+                    html += `
                         <div class="bg-felt-950 border border-felt-800 rounded-xl p-4 flex flex-col justify-between">
                             <span class="font-semibold text-sm text-slate-200 mb-3">${p.name}</span>
                             <div class="grid grid-cols-2 gap-2">
@@ -416,7 +406,6 @@
                             </div>
                         </div>
                     `;
-                    html += htmlitts;
                 });
                 html += `</div>`;
                 controls.innerHTML = html;
@@ -497,20 +486,13 @@
         }
 
         function makeClaim(playerIndex, type) {
-            if(state.claims.length === 0) {
-                // First claim!
-                state.claims.push({ playerIndex, type, time: Date.now() });
-                // If 2 player game or standard rule, move to second/accuse phase or check timer
-                // Remove 2-player special case - all players can Second or Accuse normally
-                // In 2-player, the opponent can still Second or Accuse; no forced proof phase.
-                state.phase = 'second_or_accuse';
-                renderGameUI();
-                startTimer(state.settings.timerSecond, finalizeResponses);
-            } else {
-                // Subsequent claim
-                state.claims.push({ playerIndex, type, time: Date.now() });
-                renderGameUI();
-            }
+            if(state.claims.length > 0) return; // first claim wins; the claim UI is gone by then anyway
+            state.claims.push({ playerIndex, type, time: Date.now() });
+            // Everyone else may Back or Challenge. The LAST remaining player may only Challenge
+            // (or let it finalize) - in a 2-player game the opponent is always LAST.
+            state.phase = 'second_or_accuse';
+            renderGameUI();
+            startTimer(state.settings.timerSecond, finalizeResponses);
         }
 
         function onClaimTimeout() {
@@ -526,10 +508,8 @@
             const idx = state.backers.indexOf(playerIndex);
             if(idx > -1) {
                 state.backers.splice(idx, 1);
-                state.actionOrder = state.actionOrder.filter(id => id !== playerIndex);
             } else {
                 state.backers.push(playerIndex);
-                state.actionOrder.push(playerIndex);
             }
             renderGameUI();
         }
@@ -625,9 +605,6 @@
             let losers = [solverId, ...state.backers];
             endRoundSummary(`${state.players[solverId].name} ran out of time to prove! Claimant & seconders lose.`, losers);
         }
-        function handleTimeoutLoss(solverId) {
-            endRoundSummary(`Time ran out for ${state.players[solverId].name}! They lose.`, [solverId]);
-        }
         function handleAccusationTimeout(accusedId) {
             let losers = [accusedId, ...state.backers];
             endRoundSummary(`${state.players[accusedId].name} failed to prove in time! Accused and seconders lose.`, losers);
@@ -665,12 +642,6 @@
 
             // Deduplicate loser IDs
             let uniqueLosers = [...new Set(loserIds)];
-
-            // In a 2-player game, if only one person is missing from losers and a proof was made,
-            // the other person (slower player) should be added if they weren't the solver.
-            if(state.players.length === 2 && uniqueLosers.length === 0 && state.proof.solver !== null) {
-                uniqueLosers.push(state.proof.solver === 0 ? 1 : 0);
-            }
 
             let loserNames = [];
             uniqueLosers.forEach(id => {
